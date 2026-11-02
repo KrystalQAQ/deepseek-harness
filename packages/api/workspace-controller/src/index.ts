@@ -39,6 +39,13 @@ export interface Config {
   documentsDirectory?: string
   /** Maximum duration of the operating system's Documents lookup. */
   documentsLookupTimeoutMs?: number
+  /**
+   * Register this exact directory as the first-use Workspace instead of
+   * `<Documents>/deepseek-harness/default-workspace`. A deployment that starts
+   * one Host per project sets it to that project's directory, so the sidebar
+   * opens on the project itself and no unrelated Workspace exists.
+   */
+  defaultDirectory?: string
 }
 
 /** Directory policy after schema defaults have been applied. */
@@ -58,6 +65,7 @@ export class WorkspaceController extends TypertRemoteService {
   static Config: z<Config, ResolvedConfig> = z.object({
     documentsDirectory: z.string(),
     documentsLookupTimeoutMs: z.natural().min(1).default(10_000),
+    defaultDirectory: z.string(),
   })
 
   private readonly config: ResolvedConfig
@@ -93,15 +101,25 @@ export class WorkspaceController extends TypertRemoteService {
   }
 
   /**
-   * Initialize or reuse the default Workspace during first-use startup. The
-   * directory name is fixed, so the Host never renames or relocates an
-   * existing default; its initial title is that same name, which browser
-   * consumers label in the reader's language.
+   * Initialize or reuse the default Workspace during first-use startup. Without
+   * `defaultDirectory` the directory name is fixed, so the Host never renames or
+   * relocates an existing default; its initial title is that directory's final
+   * segment, which browser consumers label in the reader's language. A
+   * configured directory is registered whenever the request finds nothing there,
+   * not only during first use: a deployment that declares one Host per project
+   * owns the Workspace list, and a Session created before the browser connects
+   * must not suppress its registration.
    * @param signal - caller lifetime; cancels native directory lookup.
    * @returns the durable Workspace, or undefined when first-use initialization is ineligible; creates no Session or message.
    */
   @Remote('initializeDefault')
   async initializeDefault(signal: AbortSignal): Promise<WorkspaceValue | undefined> {
+    const configured = this.config.defaultDirectory
+    if (configured !== undefined) {
+      const existing = await this.ctx.workspaceRegistry.resolveByPath(configured)
+      const workspace = existing ?? await this.ctx.workspaceRegistry.create(configured)
+      return { workspace: workspaceView(workspace) }
+    }
     const workspace = await this.ctx.workspaceRegistry.initializeDefault(async () => {
       const timeout = AbortSignal.timeout(this.config.documentsLookupTimeoutMs)
       return await defaultWorkspaceDirectory(
