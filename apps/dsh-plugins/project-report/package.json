@@ -1,0 +1,30 @@
+{
+  "name": "dsh-project-report",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH 插件：左侧栏「项目汇报」，按项目查看并新增 OA 日报/周报。",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "package.json"
+  ],
+  "engines": {
+    "dsh": ">=0.2.0-0 <0.3.0",
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  }
+}

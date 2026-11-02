@@ -1,0 +1,9 @@
+# 「项目汇报」插件的组合层：把宿主插件插入当前 profile。
+# - id 为插件在 Loader 中的稳定标识；
+# - name 为包名（安装后由 Node 从 profile 的 node_modules 解析）；
+# - config.projectRoot 指向包含 OA 凭证（.env.local）的项目根目录，供宿主读取 OA_ACCOUNT/OA_PASSWORD。
+- insert:
+    - id: project-report
+      name: 'dsh-project-report'
+      config:
+        projectRoot: 'D:\code\kh-app'
