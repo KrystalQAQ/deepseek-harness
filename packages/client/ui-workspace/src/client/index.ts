@@ -348,9 +348,9 @@ export function apply(ctx: Context): void {
     },
     WorkspaceBrowser,
   )) }
-  const readWorkspaceOptions = (): { sessionsOnly?: boolean } => {
+  const readWorkspaceOptions = (): { sessionsOnly?: boolean; hero?: boolean } => {
     const snapshot = sidebarScope.getSnapshot()
-    return snapshot.status === 'ready' ? snapshot.value as { sessionsOnly?: boolean } : {}
+    return snapshot.status === 'ready' ? snapshot.value as { sessionsOnly?: boolean; hero?: boolean } : {}
   }
   const syncSidebarRegion = (): void => {
     sidebarRegistration?.()
@@ -393,15 +393,29 @@ export function apply(ctx: Context): void {
       children: { 'workspace.toast': { kind: 'keyed', scope: 'root' } },
     }, RowActionToast)
   })
-  ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register(
-    {
-      name: 'conversation.hero.workspace',
-      children: { 'conversation.hero.workspace.directoryFlow': { kind: 'single', scope: 'root' } },
-      inject: pickerInjected,
-      locale: NS,
-    },
-    WorkspacePicker,
-  ))
+  let heroRegistration: (() => void) | undefined
+  const syncHeroRegion = (): void => {
+    heroRegistration?.()
+    heroRegistration = readWorkspaceOptions().hero === false
+      ? undefined
+      : ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register(
+        {
+          name: 'conversation.hero.workspace',
+          children: { 'conversation.hero.workspace.directoryFlow': { kind: 'single', scope: 'root' } },
+          inject: pickerInjected,
+          locale: NS,
+        },
+        WorkspacePicker,
+      ))
+  }
+  ctx.effect(() => {
+    syncHeroRegion()
+    const stop = sidebarScope.subscribe(syncHeroRegion)
+    return () => {
+      stop()
+      heroRegistration?.()
+    }
+  }, 'ui-workspace: hero picker')
 }
 
 /**

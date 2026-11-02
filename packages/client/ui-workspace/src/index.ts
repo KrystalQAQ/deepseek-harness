@@ -15,11 +15,14 @@ import z from '@deepseek-ai/schemastery'
 export interface Config {
   /** List Sessions without Workspace header rows; a one-Host-per-project deployment sets this. */
   sessionsOnly: Volatile<boolean | undefined>
+  /** Show the Workspace picker above the composer; a deployment that binds one Workspace turns it off. */
+  hero: Volatile<boolean | undefined>
 }
 
 /** Presentation schema; Workspace header rows stay on unless a deployment turns them off. */
 export const Config = z.object({
   sessionsOnly: z.boolean().volatile(),
+  hero: z.boolean().volatile(),
 })
 
 /**
