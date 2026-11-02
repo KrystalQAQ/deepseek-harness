@@ -17,6 +17,8 @@ export interface GatewayConfig {
   dshPrefixArgs: string[]
   /** First loopback port handed to a Host. */
   dshBasePort: number
+  /** Minutes without a request after which a project Host is stopped; 0 keeps it running. */
+  hostIdleMinutes: number
   /** Built shell assets served at the origin root. */
   webDir: string
   /**
@@ -27,6 +29,8 @@ export interface GatewayConfig {
   profileSource: string
   /** Model credentials and default selection handed to every Host. */
   llm: LlmConfig
+  /** Extra plugins every project Host loads, in overlay order. */
+  plugins: PluginEntry[]
   /** 首个人工账号的设置。 */
   auth: {
     /**
@@ -85,8 +89,10 @@ export function loadConfig(): GatewayConfig {
     dshCommand: entry === undefined ? 'dsh' : process.execPath,
     dshPrefixArgs: entry === undefined ? [] : [entry],
     dshBasePort: Number(process.env.GW_DSH_BASE_PORT ?? 3200),
+    hostIdleMinutes: Number(process.env.GW_HOST_IDLE_MINUTES ?? 15),
     webDir: process.env.GW_WEB_DIR ?? path.join(import.meta.dirname, '..', '..', 'platform-web', 'dist'),
     profileSource: process.env.GW_PROFILE_SOURCE ?? path.join(homedir(), '.dsh'),
+    plugins: plugins(process.env.GW_PLUGINS),
     llm: {
       apiKey: optional('GW_LLM_API_KEY', 'DEEPSEEK_API_KEY'),
       baseURL: optional('GW_LLM_BASE_URL', 'DEEPSEEK_BASE_URL'),
@@ -123,7 +129,31 @@ function optional(name: string, inherited: string): string | undefined {
 }
 
 /**
- * Read a setting the gateway cannot invent a value for.
+ * One plugin inserted into every project's composition.
+ */
+export interface PluginEntry {
+  /** Loader id of the inserted row. */
+  id: string
+  /** Module specifier resolved from the profile directory; a `file:///` URL needs no install. */
+  name: string
+  /** Plugin config; a `{{dir}}` value expands to the project directory. */
+  config?: Record<string, boolean | number | string>
+}
+
+/**
+ * Read the plugin list every project Host composes in.
+ * @param raw - JSON array of PluginEntry objects, or unset for none.
+ * @returns the parsed entries.
+ * @throws Error when the value is not a JSON array, so boot fails instead of dropping plugins silently.
+ */
+function plugins(raw: string | undefined): PluginEntry[] {
+  if (raw === undefined || raw === '') return []
+  const parsed: unknown = JSON.parse(raw)
+  if (!Array.isArray(parsed)) throw new Error('GW_PLUGINS 必须是 JSON 数组')
+  return parsed as PluginEntry[]
+}
+
+/**
  * @param name - environment variable name.
  * @returns its value.
  * @throws Error when the variable is unset or empty, so boot fails instead of guessing.
