@@ -102,6 +102,7 @@ const NS = 'workspace'
  */
 export const inject = ['contextMenus',
   'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker', 'layout', 'shortcuts', 'remoteAccess',
+  'configForms',
 ]
 
 /**
@@ -288,6 +289,7 @@ export function apply(ctx: Context): void {
         run: () => { requestWorkspaceAction(workspaceId, displayTitle, 'delete') } }] : [],
   }), 'workspace: delete menu action')
   const browserInjected = (): WorkspaceBrowserInjected => ({
+    sessionsOnly: readWorkspaceOptions().sessionsOnly === true,
     openWorkspaceMenu: (workspaceId, path, displayTitle, point, mode) => {
       const target = ctx.contextMenus.active.getSnapshot()
       if (mode === 'toggle' && target?.kind === 'workspace' && target.value.workspaceId === workspaceId) ctx.contextMenus.close()
@@ -326,8 +328,11 @@ export function apply(ctx: Context): void {
     hooks: { directoryFlow: pickerFlowSource },
   })
   // Each registration declares its owned children in the same call; slot
-  // injection follows both the owner and declaration HMR lifetimes.
-  ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
+  // injection follows both the owner and declaration HMR lifetimes. A
+  // single-workspace deployment (one Host per project) turns the region off.
+  const sidebarScope = ctx.configForms.get<Record<string, unknown>>('ui-workspace')
+  let sidebarRegistration: (() => void) | undefined
+  const registerSidebarBrowser = (): void => { sidebarRegistration = ctx.slots.inject('sidebar.workspaces', () => ctx.slots.register(
     {
       name: 'sidebar.workspaces',
       children: {
@@ -342,7 +347,25 @@ export function apply(ctx: Context): void {
       locale: NS,
     },
     WorkspaceBrowser,
-  ))
+  )) }
+  const readWorkspaceOptions = (): { sessionsOnly?: boolean } => {
+    const snapshot = sidebarScope.getSnapshot()
+    return snapshot.status === 'ready' ? snapshot.value as { sessionsOnly?: boolean } : {}
+  }
+  const syncSidebarRegion = (): void => {
+    sidebarRegistration?.()
+    sidebarRegistration = undefined
+    registerSidebarBrowser()
+  }
+  ctx.effect(() => {
+    syncSidebarRegion()
+    const stop = sidebarScope.subscribe(syncSidebarRegion)
+    return () => {
+      stop()
+      sidebarRegistration?.()
+      sidebarRegistration = undefined
+    }
+  }, 'ui-workspace: sidebar region')
   ctx.slots.inject('contextMenu.content', () => ctx.slots.register({
     name: 'contextMenu.content', key: 'session',
     children: { 'sidebar.workspaces.session.menu.item': {

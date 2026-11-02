@@ -5,5 +5,27 @@
  * through the package.json dsh.client declaration).
  */
 
-/** Host plugin body — no host-side behavior for the workspace picker plugin. */
-export function apply(): void {}
+import type {} from '@deepseek-ai/dsh-settings'
+
+import type { Context, Volatile } from '@deepseek-ai/cordis'
+
+import z from '@deepseek-ai/schemastery'
+
+/** Browser presentation options projected to the client. */
+export interface Config {
+  /** List Sessions without Workspace header rows; a one-Host-per-project deployment sets this. */
+  sessionsOnly: Volatile<boolean | undefined>
+}
+
+/** Presentation schema; Workspace header rows stay on unless a deployment turns them off. */
+export const Config = z.object({
+  sessionsOnly: z.boolean().volatile(),
+})
+
+/**
+ * Publish the presentation options to the browser through the settings plane.
+ * @param ctx - Plugin context used for the settings projection.
+ */
+export function apply(ctx: Context): void {
+  ctx.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ctx.fiber)) })
+}

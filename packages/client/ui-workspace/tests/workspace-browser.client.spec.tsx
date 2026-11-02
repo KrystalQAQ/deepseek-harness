@@ -125,6 +125,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     setDirectoryBusy: controls.directoryBusy,
     requestSessionRename: controls.rename,
     wide: true,
+    sessionsOnly: false,
     expandSidebar: vi.fn(),
     useSessions: hook(sessionState([])),
     useSessionStatus: hook(noPendingInteraction),
