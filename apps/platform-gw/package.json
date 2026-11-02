@@ -1,0 +1,36 @@
+{
+  "name": "@deepseek-ai/dsh-platform-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NestJS gateway that runs one DeepSeek Harness (dsh) Host per project behind the platform shell",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "tsc -p tsconfig.json && node node_modules/typeorm/cli.js migration:run -d dist/database/data-source.js",
+    "db:revert": "tsc -p tsconfig.json && node node_modules/typeorm/cli.js migration:revert -d dist/database/data-source.js",
+    "db:show": "tsc -p tsconfig.json && node node_modules/typeorm/cli.js migration:show -d dist/database/data-source.js",
+    "dev": "tsc -p tsconfig.json && node --watch dist/main.js",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "engines": {
+    "node": ">=24.9"
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.3.2",
+    "@nestjs/core": "^12.3.2",
+    "@nestjs/platform-express": "^12.3.2",
+    "@nestjs/typeorm": "^12.0.2",
+    "mysql2": "^3.24.6",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "typeorm": "^0.3.31"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.1",
+    "tsx": "^4.23.13",
+    "typescript": "^6.0.3"
+  }
+}
