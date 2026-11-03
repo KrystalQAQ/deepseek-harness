@@ -157,13 +157,19 @@ export class ProxyService {
       return
     }
 
+    const headers = this.forwardableHeaders(request.headers)
+    // A plugin's root-path API verifies the loopback origin of its own port, so the browser's Host and
+    // Origin are rewritten to the Host process it actually reaches.
+    headers.host = '127.0.0.1:' + host.port
+    if (headers.origin !== undefined) headers.origin = 'http://127.0.0.1:' + host.port
+
     const upstream = http.request(
       {
         host: '127.0.0.1',
         port: host.port,
         method: request.method,
         path: request.url ?? '/',
-        headers: this.forwardableHeaders(request.headers),
+        headers,
       },
       (upstreamResponse) => {
         const headers: Record<string, string | string[]> = {}

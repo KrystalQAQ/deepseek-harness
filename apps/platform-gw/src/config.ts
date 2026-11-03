@@ -31,6 +31,11 @@ export interface GatewayConfig {
   llm: LlmConfig
   /** Extra plugins every project Host loads, in overlay order. */
   plugins: PluginEntry[]
+  /**
+   * Plugin API prefixes whose clients address the origin root even inside a
+   * `/p/<id>/` workspace page; the gateway attributes them by Referer.
+   */
+  rootPluginApi: string[]
   /** 首个人工账号的设置。 */
   auth: {
     /**
@@ -93,6 +98,10 @@ export function loadConfig(): GatewayConfig {
     webDir: process.env.GW_WEB_DIR ?? path.join(import.meta.dirname, '..', '..', 'platform-web', 'dist'),
     profileSource: process.env.GW_PROFILE_SOURCE ?? path.join(homedir(), '.dsh'),
     plugins: plugins(process.env.GW_PLUGINS),
+    rootPluginApi: (process.env.GW_ROOT_PLUGIN_API ?? '/api/dsh-ssh,/orchestrator')
+      .split(',')
+      .map(prefix => prefix.trim())
+      .filter(prefix => prefix !== ''),
     llm: {
       apiKey: optional('GW_LLM_API_KEY', 'DEEPSEEK_API_KEY'),
       baseURL: optional('GW_LLM_BASE_URL', 'DEEPSEEK_BASE_URL'),
