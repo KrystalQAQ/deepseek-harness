@@ -15,6 +15,12 @@ import { ProxyService } from './dsh/proxy.service.js'
 const API_PREFIX = '/api'
 
 /**
+ * Plugin API mounts that their clients address at the origin root even inside a
+ * `/p/<id>/` workspace page; the gateway attributes them by Referer.
+ */
+const ROOT_PLUGIN_API = '/api/dsh-ssh'
+
+/**
  * Start the gateway: the shell at the origin root, its JSON API under /api, and
  * one per-project Host proxy under /p.
  * @returns a promise that settles once the HTTP server is listening.
@@ -26,6 +32,13 @@ async function bootstrap(): Promise<void> {
 
   app.use('/p', (request: Request, response: Response) => {
     void proxy.handle(request, response)
+  })
+  app.use((request: Request, response: Response, next: NextFunction) => {
+    if (!request.path.startsWith(ROOT_PLUGIN_API)) {
+      next()
+      return
+    }
+    void proxy.handleRootApi(request, response)
   })
   app.useStaticAssets(config.webDir, { index: 'index.html' })
   app.use((request: Request, response: Response, next: NextFunction) => {

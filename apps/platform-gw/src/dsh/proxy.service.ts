@@ -120,6 +120,71 @@ export class ProxyService {
    * Tunnel one WebSocket upgrade to its project's Host.
    * @param request - browser upgrade request, whose url still carries /p/<id>.
    * @param socket - browser socket.
+  /**
+   * Forward one origin-root plugin API request (`/api/dsh-ssh/...`) to the Host
+   * of the project whose workspace page made it.
+   *
+   * Plugin clients build their routes against the origin root, so a page mounted
+   * at `/p/<id>/` cannot reach them through the mount. The Referer names that
+   * mount; without it the request cannot be attributed to a project and is
+   * refused rather than guessed at.
+   * @param request - browser request, whose url still carries the root path.
+   * @param response - browser response.
+   * @returns a promise that settles once the request is forwarded or refused.
+   */
+  async handleRootApi(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    const user = this.auth.verify(readCookie(request, SESSION_COOKIE))
+    if (user === undefined) {
+      this.fail(response, 401, '未登录网关')
+      return
+    }
+    const id = projectIdFromReferer(request.headers.referer)
+    if (id === undefined) {
+      this.fail(response, 400, '缺少 Referer，无法确定项目')
+      return
+    }
+    const project = await this.projects.find(id)
+    if (project === undefined || project.ownerUid !== user.uid) {
+      this.fail(response, 404, '项目不存在')
+      return
+    }
+    let host: RunningHost
+    try {
+      host = await this.hosts.ensure(project)
+    } catch (error) {
+      this.logger.warn('启动失败 ' + id + ': ' + String(error))
+      this.fail(response, 502, '项目 Host 未能启动')
+      return
+    }
+
+    const upstream = http.request(
+      {
+        host: '127.0.0.1',
+        port: host.port,
+        method: request.method,
+        path: request.url ?? '/',
+        headers: this.forwardableHeaders(request.headers),
+      },
+      (upstreamResponse) => {
+        const headers: Record<string, string | string[]> = {}
+        for (const [name, value] of Object.entries(upstreamResponse.headers)) {
+          if (value !== undefined) headers[name] = value
+        }
+        response.writeHead(upstreamResponse.statusCode ?? 502, headers)
+        upstreamResponse.pipe(response)
+      },
+    )
+    upstream.on('error', (error: NodeJS.ErrnoException) => {
+      this.logger.warn('转发失败 ' + id + ': ' + error.message)
+      this.fail(response, 502, 'dsh Host 无响应 (' + (error.code ?? error.message) + ')')
+    })
+    request.pipe(upstream)
+  }
+
+  /**
+   * Tunnel one WebSocket upgrade to the Host of its project.
+   * @param request - browser upgrade request, whose url still carries /p/<id>.
+   * @param socket - browser socket.
    * @param head - bytes read past the handshake.
    */
   async upgrade(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
@@ -210,4 +275,21 @@ export class ProxyService {
     response.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' })
     response.end(message)
   }
+}
+
+/**
+ * The project id named by a workspace page mount, read from its Referer.
+ * @param referer - the `Referer` request header, when the browser sent one.
+ * @returns the project id, or undefined when the value carries no mount.
+ */
+function projectIdFromReferer(referer: string | undefined): string | undefined {
+  if (referer === undefined) return undefined
+  let pathname: string
+  try {
+    pathname = new URL(referer).pathname
+  } catch {
+    return undefined
+  }
+  const match = /^\/p\/([^/?#]+)/.exec(pathname)
+  return match === null ? undefined : match[1]
 }

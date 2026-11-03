@@ -222,20 +222,51 @@ function overrideLines(project: HostProject, plugin: PluginEntry): string[] {
 }
 
 /**
+ * Whether the project profile stores a model the user picked in the UI.
+ *
+ * The model picker persists through the config editor, which writes an
+ * `agent-default-model` override into the profile patch. Overlay values win
+ * over that layer, so the overlay may seed the deployment default only while
+ * the profile has not recorded a choice of its own.
+ * @param home - project DSH home.
+ * @returns true when the profile patch overrides `agent-default-model` with a model.
+ */
+function modelSelected(home: string): boolean {
+  let text: string
+  try {
+    text = readFileSync(path.join(home, 'profiles', 'web', 'cordis.patch.yml'), 'utf8')
+  } catch {
+    return false
+  }
+  const lines = text.split(/\r?\n/)
+  const start = lines.findIndex(line => /^\s*-\s+id:\s*['"]?agent-default-model['"]?\s*$/.test(line))
+  if (start < 0) return false
+  for (const line of lines.slice(start + 1)) {
+    if (/^\s*-\s+id:/.test(line)) return false
+    if (/^\s+model:/.test(line)) return true
+  }
+  return false
+}
+
+/**
  * Write the loader overlay that binds one Host to its own project.
  *
  * The overlay pins the project directory as the only Workspace, so the sidebar
- * opens on the project instead of the shared <Documents> default, and fixes
- * the model a new session starts on. Overwriting it on every start keeps the
- * file derived from the registry rather than a second source of truth.
+ * opens on the project instead of the shared <Documents> default, and seeds
+ * the model a new session starts on unless the profile already stores one.
+ * Overwriting it on every start keeps the file derived from the registry rather
+ * than a second source of truth.
  * @param file - overlay path owned by the gateway.
  * @param project - project being started.
+ * @param home - project DSH home, which holds the profile patch.
  * @param llm - deployment model default.
  * @param plugins - plugins the profile cannot resolve yet; the profile patch carries installed ones.
+ * @param overrides - plugin overrides for plugins the profile already resolves.
  */
 function writeOverlay(
   file: string,
   project: HostProject,
+  home: string,
   llm: LlmConfig,
   plugins: readonly PluginEntry[],
   overrides: readonly PluginEntry[],
@@ -243,6 +274,14 @@ function writeOverlay(
   const directory = JSON.stringify(project.dir)
   const inserted = pluginLines(project, plugins)
   const overridden = overrides.flatMap(plugin => overrideLines(project, plugin))
+  const defaults = modelSelected(home)
+    ? []
+    : [
+      '- id: agent-default-model',
+      '  config:',
+      '    provider: ' + JSON.stringify(llm.provider),
+      '    model: ' + JSON.stringify(llm.model),
+    ]
   writeFileSync(
     file,
     [
@@ -250,10 +289,7 @@ function writeOverlay(
       '- id: workspace-controller',
       '  config:',
       '    defaultDirectory: ' + directory,
-      '- id: agent-default-model',
-      '  config:',
-      '    provider: ' + JSON.stringify(llm.provider),
-      '    model: ' + JSON.stringify(llm.model),
+      ...defaults,
       '- id: ui-settings-general',
       '  config:',
       '    welcomeNoticeVersion: "2026-09-28.1"',
@@ -346,7 +382,7 @@ export class DshHostService implements OnApplicationShutdown {
     const overlay = path.join(overlayDir, project.id + '.yml')
     const pending = this.config.plugins.filter(plugin => !pluginInstalled(home, plugin))
     const installed = this.config.plugins.filter(plugin => pluginInstalled(home, plugin)).map(plugin => overlayPlugin(home, plugin))
-    writeOverlay(overlay, project, this.config.llm, pending.map(plugin => overlayPlugin(home, plugin)), installed)
+    writeOverlay(overlay, project, home, this.config.llm, pending.map(plugin => overlayPlugin(home, plugin)), installed)
     const args = [
       ...this.config.dshPrefixArgs,
       '--profile',
@@ -393,7 +429,7 @@ export class DshHostService implements OnApplicationShutdown {
             installLocalPlugins(home, this.config.plugins)
             const pending = this.config.plugins.filter(plugin => !pluginInstalled(home, plugin))
             const installed = this.config.plugins.filter(plugin => pluginInstalled(home, plugin)).map(plugin => overlayPlugin(home, plugin))
-            writeOverlay(overlay, project, this.config.llm, pending.map(plugin => overlayPlugin(home, plugin)), installed)
+            writeOverlay(overlay, project, home, this.config.llm, pending.map(plugin => overlayPlugin(home, plugin)), installed)
           } catch (error) {
             this.logger.warn('[' + project.id + '] 插件登记失败: ' + (error as Error).message)
           }
