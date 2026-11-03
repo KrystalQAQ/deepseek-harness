@@ -14,12 +14,11 @@ export default function Shell(props: {
     <div className="shell">
       <header className="shell-bar">
         <button className="brand" type="button" onClick={props.onHome}>
-          <span className="brand-mark" aria-hidden="true" />
           <span>Super Agent</span>
         </button>
         <div className="shell-user">
           {props.switcher}
-          <span className="muted">{props.user.name}</span>
+          {/* <span className="muted">{props.user.name}</span> */}
           <button className="ghost" type="button" onClick={props.onSignOut}>
             退出登录
           </button>

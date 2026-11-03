@@ -74,8 +74,7 @@ export default function ProjectsPage() {
     <section className="page">
       <div className="page-head">
         <div>
-          <h1>AI 项目</h1>
-          <p className="muted">每个项目绑定一个目录，并拥有独立的 Agent 进程与会话</p>
+          <h1>项目中心</h1>
         </div>
         <div className="page-actions">
           <button className="ghost" onClick={() => void load()} type="button">
